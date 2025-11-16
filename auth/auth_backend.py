@@ -1,73 +1,76 @@
-import json
-import os
+# auth/auth_backend.py
 import hashlib
-
-# -----------------------------
-# Base directory for JSON
-# -----------------------------
-# In Railway it will be /data (from env DATA_DIR)
-BASE_DIR = os.getenv(
-    "DATA_DIR",
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # local fallback
-)
-
-USERS_FILE = os.path.join(BASE_DIR, "users.json")
+from psycopg2.extras import RealDictCursor
+from db import get_db_connection
 
 
-def load_users():
-    """Load users safely from JSON."""
-    if not os.path.exists(USERS_FILE):
-        # create empty JSON file if not exists
-        with open(USERS_FILE, "w") as f:
-            json.dump({}, f)
-        return {}
-
-    try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        return {}
-
-
-def save_users(users):
-    """Save users to JSON."""
-    # ensure directory exists
-    os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f, indent=4)
-
-
-def hash_password(password):
+def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-def signup_user(username, password, role):
-    users = load_users()
+def signup_user(username: str, password: str, role: str):
+    """Create a new user in DB."""
+    username = username.strip()
+    role = role.strip()
 
-    if username in users:
+    if not username or not password or not role:
+        return False, "All fields are required."
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # Check if username exists
+    cur.execute("SELECT 1 FROM users WHERE username = %s;", (username,))
+    if cur.fetchone():
+        cur.close()
+        conn.close()
         return False, "❌ Username already exists!"
 
-    users[username] = {
-        "password": hash_password(password),
-        "role": role
-    }
+    pwd_hash = hash_password(password)
 
-    save_users(users)
+    cur.execute(
+        "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s);",
+        (username, pwd_hash, role)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
     return True, f"✅ Signup successful! You are registered as {role}."
 
 
-def login_user(username, password):
-    users = load_users()
+def login_user(username: str, password: str):
+    """Verify username/password and return user object."""
+    username = username.strip()
 
-    if username not in users:
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+
+    cur.execute("SELECT id, username, password_hash, role FROM users WHERE username = %s;", (username,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row:
         return False, "❌ User not found!", None
 
-    stored_hash = users[username]["password"]
-    if stored_hash != hash_password(password):
+    if row["password_hash"] != hash_password(password):
         return False, "⚠️ Incorrect password!", None
 
     user_info = {
-        "username": username,
-        "role": users[username]["role"]
+        "id": row["id"],
+        "username": row["username"],
+        "role": row["role"]
     }
     return True, "Login successful!", user_info
+
+
+def load_users():
+    """Return all users (for Admin dashboard)."""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT id, username, role, created_at FROM users ORDER BY created_at DESC;")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
