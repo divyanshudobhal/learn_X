@@ -2,7 +2,9 @@ from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import os
-import json
+
+# Database
+from db import init_db, get_db_connection
 
 # Backend helpers
 from auth.auth_backend import login_user, signup_user, load_users
@@ -12,36 +14,19 @@ from utils.storage_utils import upload_file_with_metadata, delete_file, rename_f
 from utils.pdf_utils import summarize_pdf
 from utils.ai_logs import load_ai_logs, save_ai_log
 
+from psycopg2.extras import RealDictCursor
+
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-key")
 
 # ======================================================
-# PATH CONFIG (IMPORTANT FOR RENDER)
+# PATH CONFIG (for temporary upload storage only)
 # ======================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-UPLOAD_RECORD = os.path.join(BASE_DIR, "uploads.json")
-AI_LOGS_RECORD = os.path.join(BASE_DIR, "ai_logs.json")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# ======================================================
-# LOAD & SAVE Upload Metadata
-# ======================================================
-def load_uploads():
-    if not os.path.exists(UPLOAD_RECORD):
-        return []
-    with open(UPLOAD_RECORD, "r") as f:
-        return json.load(f)
-
-def save_uploads(data):
-    with open(UPLOAD_RECORD, "w") as f:
-        json.dump(data, f, indent=4)
 
 
 # ======================================================
@@ -61,6 +46,89 @@ def login_required(role=None):
 
 
 # ======================================================
+# UPLOAD HELPERS (DB)
+# ======================================================
+def db_get_uploads():
+    """Return list of uploads as dicts (with tags as list)."""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("""
+        SELECT id, uploaded_by, filename, url, tags, summary, uploaded_at
+        FROM uploads
+        ORDER BY uploaded_at DESC;
+    """)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    # Convert tags "a,b,c" -> ["a","b","c"]
+    for r in rows:
+        tags_str = r.get("tags") or ""
+        if tags_str.strip():
+            r["tags"] = [t.strip() for t in tags_str.split(",") if t.strip()]
+        else:
+            r["tags"] = []
+    return rows
+
+
+def db_add_upload(upload_dict: dict):
+    """Insert a new upload row into DB."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    tags_list = upload_dict.get("tags") or []
+    tags_str = ",".join(tags_list)
+
+    cur.execute("""
+        INSERT INTO uploads (uploaded_by, filename, url, tags, summary)
+        VALUES (%s, %s, %s, %s, %s);
+    """, (
+        upload_dict["uploaded_by"],
+        upload_dict["filename"],
+        upload_dict["url"],
+        tags_str,
+        upload_dict.get("summary")
+    ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def db_delete_upload(filename: str, username: str):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        DELETE FROM uploads
+        WHERE filename = %s AND uploaded_by = %s;
+    """, (filename, username))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def db_rename_upload(old_name: str, new_name: str, username: str, new_tags):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    tags_str = ",".join(new_tags) if new_tags else ""
+    cur.execute("""
+        UPDATE uploads
+        SET filename = %s, tags = %s
+        WHERE filename = %s AND uploaded_by = %s;
+    """, (new_name, tags_str, old_name, username))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# ======================================================
+# APP STARTUP: INIT DB
+# ======================================================
+@app.before_first_request
+def before_first_request():
+    init_db()
+
+
+# ======================================================
 # ROUTES
 # ======================================================
 
@@ -73,8 +141,8 @@ def home():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
 
         success, msg, user = login_user(username, password)
         if not success:
@@ -91,9 +159,9 @@ def login():
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
-        u = request.form["username"]
-        p = request.form["password"]
-        r = request.form["role"]
+        u = request.form.get("username", "")
+        p = request.form.get("password", "")
+        r = request.form.get("role", "")
 
         ok, msg = signup_user(u, p, r)
         if not ok:
@@ -129,7 +197,7 @@ def student_dashboard():
     return render_template(
         "student_dashboard.html",
         username=session["username"],
-        files=load_uploads()
+        files=db_get_uploads()
     )
 
 
@@ -148,7 +216,7 @@ def teacher_dashboard():
 @login_required("Admin")
 def admin_dashboard():
     users = load_users()
-    files = load_uploads()
+    files = db_get_uploads()
     ai_logs = load_ai_logs()
 
     return render_template(
@@ -176,7 +244,7 @@ def chatbot():
 @login_required()
 def api_chat():
     data = request.get_json() or {}
-    q = data.get("message", "")
+    q = data.get("message", "").strip()
     ans = ask_ai(q)
     save_ai_log(q, ans, session["username"])
     return {"answer": ans}
@@ -208,16 +276,14 @@ def upload_page():
         tags = generate_ai_tags(filename)
         summary = summarize_pdf(temp_path) if filename.lower().endswith(".pdf") else None
 
-        # Save metadata to uploads.json
-        records = load_uploads()
-        records.append({
+        # Save metadata to DB
+        db_add_upload({
             "uploaded_by": session["username"],
             "filename": filename,
             "url": s3_url,
             "tags": tags,
             "summary": summary
         })
-        save_uploads(records)
 
         # Remove local temp
         os.remove(temp_path)
@@ -233,22 +299,23 @@ def upload_page():
 @app.route("/files")
 @login_required()
 def files_page():
-    files = load_uploads()
+    files = db_get_uploads()
 
-    search = request.args.get("search", "").strip().lower()
-    file_type = request.args.get("type", "all").lower()
+    search = (request.args.get("search") or "").strip().lower()
+    file_type = (request.args.get("type") or "all").lower()
 
     # ---- search ----
     if search:
-        files = [
-            f for f in files
-            if search in f["filename"].lower()
-            or any(search in t.lower() for t in f.get("tags", []))
-        ]
+        filtered = []
+        for f in files:
+            filename_match = search in f["filename"].lower()
+            tags_match = any(search in t.lower() for t in f.get("tags", []))
+            if filename_match or tags_match:
+                filtered.append(f)
+        files = filtered
 
     # ---- type filter ----
     if file_type != "all":
-
         def match(file):
             name = file["filename"].lower()
 
@@ -260,7 +327,6 @@ def files_page():
                 return any(name.endswith(e) for e in [".mp4", ".mov", ".avi", ".mkv"])
             if file_type == "doc":
                 return any(name.endswith(e) for e in [".doc", ".docx", ".txt", ".ppt", ".pptx", ".xls", ".xlsx"])
-
             # "other" or unknown -> allow all
             return True
 
@@ -279,23 +345,20 @@ def files_page():
 @app.route("/teacher/files")
 @login_required("Teacher")
 def teacher_files():
-    mine = [f for f in load_uploads() if f.get("uploaded_by") == session["username"]]
+    all_files = db_get_uploads()
+    mine = [f for f in all_files if f.get("uploaded_by") == session["username"]]
     return render_template("teacher_files.html", files=mine)
 
 
 @app.post("/teacher/files/delete/<filename>")
 @login_required("Teacher")
 def delete_teacher_file(filename):
-    records = load_uploads()
-    records = [
-        r for r in records
-        if not (r["filename"] == filename and r.get("uploaded_by") == session["username"])
-    ]
-
     # Delete from S3
     delete_file(filename)
 
-    save_uploads(records)
+    # Delete from DB
+    db_delete_upload(filename, session["username"])
+
     return redirect(url_for("teacher_files"))
 
 
@@ -306,16 +369,15 @@ def rename_teacher_file(filename):
     if not new_name:
         return redirect(url_for("teacher_files"))
 
-    records = load_uploads()
-    for r in records:
-        if r["filename"] == filename and r.get("uploaded_by") == session["username"]:
-            # Rename in S3
-            rename_file(filename, new_name)
-            r["filename"] = new_name
-            r["tags"] = generate_ai_tags(new_name)
-            break
+    # Generate fresh tags
+    new_tags = generate_ai_tags(new_name)
 
-    save_uploads(records)
+    # Rename in S3
+    rename_file(filename, new_name)
+
+    # Update DB
+    db_rename_upload(filename, new_name, session["username"], new_tags)
+
     return redirect(url_for("teacher_files"))
 
 
