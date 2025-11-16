@@ -1,30 +1,40 @@
-import os
-import json
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-AI_LOGS_FILE = os.path.join(BASE_DIR, "../ai_logs.json")   # FIXED PATH
-
-def load_ai_logs():
-    """Load AI logs safely."""
-    if not os.path.exists(AI_LOGS_FILE):
-        return []
-
-    try:
-        with open(AI_LOGS_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return []
+# utils/ai_logs.py
+from db import get_db_connection
+from psycopg2.extras import RealDictCursor
 
 
-def save_ai_log(question, answer, username):
-    """Save a new AI log entry."""
-    logs = load_ai_logs()
+def load_ai_logs(limit: int = 100):
+    """
+    Return latest AI logs as a list of dicts for admin dashboard.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    logs.append({
-        "user": username,
-        "question": question,
-        "answer": answer
-    })
+    cur.execute("""
+        SELECT id, username, question, answer, created_at
+        FROM ai_logs
+        ORDER BY created_at DESC
+        LIMIT %s;
+    """, (limit,))
+    logs = cur.fetchall()
 
-    with open(AI_LOGS_FILE, "w") as f:
-        json.dump(logs, f, indent=4)
+    cur.close()
+    conn.close()
+    return logs
+
+
+def save_ai_log(question: str, answer: str, username: str):
+    """
+    Insert a new AI interaction into ai_logs.
+    """
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO ai_logs (username, question, answer)
+        VALUES (%s, %s, %s);
+    """, (username, question, answer))
+
+    conn.commit()
+    cur.close()
+    conn.close()
