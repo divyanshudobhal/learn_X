@@ -3,8 +3,8 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import os
 
-# Database
 from db import init_db, get_db_connection
+from psycopg2.extras import RealDictCursor
 
 # Backend helpers
 from auth.auth_backend import login_user, signup_user, load_users
@@ -14,42 +14,21 @@ from utils.storage_utils import upload_file_with_metadata, delete_file, rename_f
 from utils.pdf_utils import summarize_pdf
 from utils.ai_logs import load_ai_logs, save_ai_log
 
-from psycopg2.extras import RealDictCursor
-
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-key")
 
-# ======================================================
-# PATH CONFIG (for temporary upload storage only)
-# ======================================================
+# ---------- TEMP UPLOAD FOLDER (only for local temp files) ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 # ======================================================
-# Login Required Decorator
-# ======================================================
-def login_required(role=None):
-    def wrapper(fn):
-        def decorated(*args, **kwargs):
-            if "username" not in session:
-                return redirect(url_for("login"))
-            if role and session.get("role") != role:
-                return redirect(url_for("dashboard"))
-            return fn(*args, **kwargs)
-        decorated.__name__ = fn.__name__
-        return decorated
-    return wrapper
-
-
-# ======================================================
-# UPLOAD HELPERS (DB)
+# DB HELPERS FOR UPLOADS
 # ======================================================
 def db_get_uploads():
-    """Return list of uploads as dicts (with tags as list)."""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute("""
@@ -61,20 +40,17 @@ def db_get_uploads():
     cur.close()
     conn.close()
 
-    # Convert tags "a,b,c" -> ["a","b","c"]
+    # Convert tags string "a,b,c" -> ["a","b","c"]
     for r in rows:
-        tags_str = r.get("tags") or ""
-        if tags_str.strip():
-            r["tags"] = [t.strip() for t in tags_str.split(",") if t.strip()]
-        else:
-            r["tags"] = []
+        t = r.get("tags") or ""
+        r["tags"] = [x.strip() for x in t.split(",") if x.strip()]
     return rows
 
 
 def db_add_upload(upload_dict: dict):
-    """Insert a new upload row into DB."""
     conn = get_db_connection()
     cur = conn.cursor()
+
     tags_list = upload_dict.get("tags") or []
     tags_str = ",".join(tags_list)
 
@@ -121,11 +97,27 @@ def db_rename_upload(old_name: str, new_name: str, username: str, new_tags):
 
 
 # ======================================================
-# APP STARTUP: INIT DB
+# INIT DB ON FIRST REQUEST
 # ======================================================
 @app.before_first_request
 def before_first_request():
     init_db()
+
+
+# ======================================================
+# LOGIN REQUIRED DECORATOR
+# ======================================================
+def login_required(role=None):
+    def wrapper(fn):
+        def decorated(*args, **kwargs):
+            if "username" not in session:
+                return redirect(url_for("login"))
+            if role and session.get("role") != role:
+                return redirect(url_for("dashboard"))
+            return fn(*args, **kwargs)
+        decorated.__name__ = fn.__name__
+        return decorated
+    return wrapper
 
 
 # ======================================================
@@ -137,7 +129,7 @@ def home():
     return redirect(url_for("login"))
 
 
-# --------------------- LOGIN ---------------------
+# ---------- LOGIN ----------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -148,14 +140,14 @@ def login():
         if not success:
             return render_template("login.html", error=msg)
 
-        session["username"] = username
+        session["username"] = user["username"]
         session["role"] = user["role"]
         return redirect(url_for("dashboard"))
 
     return render_template("login.html")
 
 
-# --------------------- SIGNUP ---------------------
+# ---------- SIGNUP ----------
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
@@ -178,7 +170,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# --------------------- DASHBOARD Logic ---------------------
+# ---------- DASHBOARD ROUTER ----------
 @app.route("/dashboard")
 @login_required()
 def dashboard():
@@ -190,7 +182,7 @@ def dashboard():
     return redirect(url_for("student_dashboard"))
 
 
-# --------------------- STUDENT ---------------------
+# ---------- STUDENT ----------
 @app.route("/dashboard/student")
 @login_required("Student")
 def student_dashboard():
@@ -201,7 +193,7 @@ def student_dashboard():
     )
 
 
-# --------------------- TEACHER ---------------------
+# ---------- TEACHER ----------
 @app.route("/dashboard/teacher")
 @login_required("Teacher")
 def teacher_dashboard():
@@ -211,7 +203,7 @@ def teacher_dashboard():
     )
 
 
-# --------------------- ADMIN ---------------------
+# ---------- ADMIN ----------
 @app.route("/dashboard/admin")
 @login_required("Admin")
 def admin_dashboard():
@@ -244,7 +236,7 @@ def chatbot():
 @login_required()
 def api_chat():
     data = request.get_json() or {}
-    q = data.get("message", "").strip()
+    q = (data.get("message") or "").strip()
     ans = ask_ai(q)
     save_ai_log(q, ans, session["username"])
     return {"answer": ans}
@@ -265,18 +257,18 @@ def upload_page():
         if not filename:
             return render_template("upload.html", error="Invalid filename.")
 
-        # Save temporarily to /uploads folder (local)
+        # Save temp
         temp_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(temp_path)
 
         # Upload to S3 -> CloudFront
         s3_url = upload_file_with_metadata(temp_path, key=filename)
 
-        # AI tags + optional PDF summary
+        # AI tags + optional summary
         tags = generate_ai_tags(filename)
         summary = summarize_pdf(temp_path) if filename.lower().endswith(".pdf") else None
 
-        # Save metadata to DB
+        # Save in DB
         db_add_upload({
             "uploaded_by": session["username"],
             "filename": filename,
@@ -285,9 +277,7 @@ def upload_page():
             "summary": summary
         })
 
-        # Remove local temp
         os.remove(temp_path)
-
         return render_template("upload_success.html", url=s3_url, tags=tags)
 
     return render_template("upload.html")
@@ -304,7 +294,7 @@ def files_page():
     search = (request.args.get("search") or "").strip().lower()
     file_type = (request.args.get("type") or "all").lower()
 
-    # ---- search ----
+    # --- search ---
     if search:
         filtered = []
         for f in files:
@@ -314,11 +304,10 @@ def files_page():
                 filtered.append(f)
         files = filtered
 
-    # ---- type filter ----
+    # --- type filter ---
     if file_type != "all":
         def match(file):
             name = file["filename"].lower()
-
             if file_type == "pdf":
                 return name.endswith(".pdf")
             if file_type == "image":
@@ -327,7 +316,6 @@ def files_page():
                 return any(name.endswith(e) for e in [".mp4", ".mov", ".avi", ".mkv"])
             if file_type == "doc":
                 return any(name.endswith(e) for e in [".doc", ".docx", ".txt", ".ppt", ".pptx", ".xls", ".xlsx"])
-            # "other" or unknown -> allow all
             return True
 
         files = [f for f in files if match(f)]
