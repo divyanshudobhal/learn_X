@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Student Dashboard • LearnX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl w-full">
+
+  <!-- Header -->
+  <div class="text-center mb-10">
+    <h1 class="text-3xl font-semibold mb-2">🎓 Student Dashboard</h1>
+    <p class="text-sm text-slate-400">
+      Preview & download study materials uploaded by teachers.
+    </p>
+  </div>
+
+  <!-- Search + Filter Section -->
+  <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 mb-8">
+    <form method="GET" action="{{ url_for('files_page') }}" class="flex flex-col md:flex-row gap-4 items-center">
+
+      <!-- Search bar -->
+      <input type="text" name="search" placeholder="Search by filename or tags..."
+             class="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700
+                    text-sm text-slate-300 focus:ring-2 focus:ring-indigo-500">
+
+      <!-- File type dropdown -->
+      <select name="type"
+              class="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm text-slate-300">
+        <option value="all">All</option>
+        <option value="pdf">PDF</option>
+        <option value="image">Image</option>
+        <option value="video">Video</option>
+        <option value="doc">Documents</option>
+        <option value="other">Other</option>
+      </select>
+
+      <!-- Search button -->
+      <button type="submit"
+        class="px-5 py-2 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm shadow-md shadow-indigo-500/30">
+        Search
+      </button>
+
+      <!-- Show All -->
+      <a href="{{ url_for('files_page') }}"
+        class="px-5 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm">
+        Show All
+      </a>
+
+    </form>
+  </div>
+
+  <!-- Divider -->
+  <h2 class="text-lg font-medium text-slate-300 mb-4">📁 Latest Uploaded Files</h2>
+
+  <!-- File Cards (previews) -->
+  <div class="space-y-5">
+
+    {% if files|length == 0 %}
+      <div class="text-center p-6 bg-slate-900/60 border border-slate-800 rounded-xl">
+        <p class="text-slate-400 text-sm">No files uploaded yet.</p>
+      </div>
+    {% endif %}
+
+    {% for file in files %}
+      <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500 
+                  transition shadow hover:shadow-indigo-500/20">
+
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+
+          <!-- File Info -->
+          <div class="md:w-2/3">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="text-2xl">📄</span>
+              <h2 class="text-lg font-medium">{{ file.filename }}</h2>
+            </div>
+
+            <p class="text-xs text-slate-500 mb-2">
+              Uploaded by: <span class="text-indigo-400">{{ file.uploaded_by }}</span>
+            </p>
+
+            <!-- Tags -->
+            <div class="flex flex-wrap gap-2 mt-2">
+              {% for tag in file.tags %}
+                <span class="px-2 py-1 rounded-full text-[11px] bg-indigo-500/20 text-indigo-300 
+                           border border-indigo-500/40">
+                  #{{ tag }}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div class="mt-4 md:mt-0 flex gap-3">
+            <a href="{{ file.url }}" target="_blank"
+               class="px-4 py-2 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm">
+              Preview
+            </a>
+
+            <a href="{{ file.url }}" download
+               class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm">
+              Download
+            </a>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+
+  </div>
+
+  <!-- Bottom Buttons -->
+  <div class="mt-12 flex flex-col items-center gap-3">
+    <a href="{{ url_for('dashboard') }}"
+       class="px-6 py-2 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm">
+      Refresh
+    </a>
+
+    <a href="{{ url_for('chatbot') }}"
+       class="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm">
+      💬 Chat Assistant
+    </a>
+
+    <a href="{{ url_for('logout') }}"
+       class="px-6 py-2 bg-red-600 hover:bg-red-500 rounded-xl text-sm">
+      Logout
+    </a>
+  </div>
+
+</div>
+{% endblock %}

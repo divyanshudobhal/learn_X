@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}LearnX{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='custom.css') }}">
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+
+  <!-- Navbar -->
+  <nav class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20">
+    <div class="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
+      <a href="{{ url_for('dashboard') if session.get('username') else url_for('login') }}"
+         class="font-semibold text-lg tracking-tight">
+        <span class="text-indigo-400">Learn</span>X
+      </a>
+
+      <div class="flex items-center gap-4 text-sm">
+        {% if session.get("username") %}
+          <span class="hidden sm:inline text-slate-300">
+            {{ session.get("username") }} • {{ session.get("role") }}
+          </span>
+          <a href="{{ url_for('chatbot') }}" class="hover:text-indigo-400 transition-colors">
+            Chatbot
+          </a>
+          <a href="{{ url_for('logout') }}"
+             class="px-3 py-1 rounded-full border border-slate-700 hover:border-red-500 hover:text-red-400 text-xs sm:text-sm transition">
+            Logout
+          </a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="hover:text-indigo-400">Login</a>
+          <a href="{{ url_for('signup') }}"
+             class="px-3 py-1 rounded-full bg-indigo-500 hover:bg-indigo-400 text-xs sm:text-sm transition">
+            Sign up
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page content -->
+  <main class="flex-1 flex items-center justify-center px-4 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="py-4 text-center text-xs text-slate-500">
+    © {{ 2025 }} LearnX • Built with Flask
+  </footer>
+</body>
+</html>

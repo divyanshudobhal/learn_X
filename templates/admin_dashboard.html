@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard • LearnX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl w-full">
+
+  <h1 class="text-3xl font-semibold mb-3">Admin Dashboard 🛡️</h1>
+  <p class="text-slate-400 mb-6">Platform Overview & Controls</p>
+
+  <!-- Stats -->
+  <div class="grid md:grid-cols-3 gap-4 mb-8">
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
+      <h3 class="text-sm text-slate-400">Total Users</h3>
+      <p class="text-3xl font-bold mt-1">{{ total_users }}</p>
+    </div>
+
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
+      <h3 class="text-sm text-slate-400">Total Files</h3>
+      <p class="text-3xl font-bold mt-1">{{ total_files }}</p>
+    </div>
+
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5">
+      <h3 class="text-sm text-slate-400">AI Queries</h3>
+      <p class="text-3xl font-bold mt-1">{{ ai_queries }}</p>
+    </div>
+  </div>
+
+  <!-- User List -->
+  <h2 class="text-xl font-semibold mt-6 mb-3">Users</h2>
+  <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 mb-8 overflow-x-auto">
+    <table class="w-full text-left">
+      <thead>
+        <tr class="text-slate-400 text-sm">
+          <th class="py-2">Username</th>
+          <th class="py-2">Role</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for username, info in users.items() %}
+        <tr class="border-b border-slate-800/50">
+          <td class="py-2">{{ username }}</td>
+          <td class="py-2 text-slate-300">{{ info.role or info['role'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- File List -->
+  <h2 class="text-xl font-semibold mb-3">Uploaded Files</h2>
+  <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 mb-8 overflow-x-auto">
+    <table class="w-full text-left">
+      <thead>
+        <tr class="text-slate-400 text-sm">
+          <th class="py-2">Filename</th>
+          <th class="py-2">Uploaded By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in files %}
+        <tr class="border-b border-slate-800/50">
+          <td class="py-2">{{ f.filename or f['filename'] }}</td>
+          <td class="py-2">{{ f.uploaded_by or f['uploaded_by'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- AI Logs -->
+  <h2 class="text-xl font-semibold mb-3">AI Activity Logs</h2>
+  <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 overflow-x-auto">
+    <table class="w-full text-left">
+      <thead>
+        <tr class="text-slate-400 text-sm">
+          <th class="py-2">User</th>
+          <th class="py-2">Question</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in ai_logs %}
+        <tr class="border-b border-slate-800/50">
+          <td class="py-2">{{ log.user or log['user'] }}</td>
+          <td class="py-2 text-slate-300">{{ log.question or log['question'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

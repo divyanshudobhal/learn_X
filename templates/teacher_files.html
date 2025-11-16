@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}My Uploads • LearnX{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl w-full">
+
+  <h1 class="text-2xl font-semibold mb-2">📂 My Uploaded Files</h1>
+  <p class="text-sm text-slate-400 mb-6">
+    Manage, rename, or delete the materials you’ve uploaded.
+  </p>
+
+  {% if files|length == 0 %}
+    <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 text-center">
+      <p class="text-slate-400 text-sm">You haven't uploaded any files yet.</p>
+    </div>
+  {% else %}
+
+  <div class="space-y-4">
+    {% for file in files %}
+      <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+
+        <!-- Left info -->
+        <div class="md:w-2/3">
+          <h2 class="text-lg font-medium mb-1 flex items-center gap-2">
+            <span>📄</span> {{ file.filename }}
+          </h2>
+
+          {% if file.summary %}
+            <div class="mt-2 text-xs text-slate-300 bg-slate-800/70 border border-slate-700 rounded-xl p-3">
+              <div class="text-[11px] uppercase tracking-wide text-slate-500 mb-1">AI Summary</div>
+              <p class="whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">{{ file.summary }}</p>
+            </div>
+          {% endif %}
+
+          <div class="mt-2 flex flex-wrap gap-2">
+            {% for tag in file.tags %}
+              <span class="px-2 py-1 rounded-full text-[11px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                #{{ tag }}
+              </span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Right actions -->
+        <div class="flex flex-col items-end gap-2">
+
+          <a href="{{ file.url }}" target="_blank"
+             class="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-xs">
+            Preview
+          </a>
+
+          <!-- Rename form -->
+          <form method="POST" action="{{ url_for('rename_teacher_file', filename=file.filename) }}" class="flex gap-2 mt-2">
+            <input name="new_name" placeholder="New name.ext"
+                   class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 w-40">
+            <button type="submit"
+                    class="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs">
+              Rename
+            </button>
+          </form>
+
+          <!-- Delete -->
+          <form method="POST" action="{{ url_for('delete_teacher_file', filename=file.filename) }}" class="mt-2">
+            <button type="submit"
+                    class="px-4 py-1.5 bg-red-600 hover:bg-red-500 rounded-xl text-xs"
+                    onclick="return confirm('Delete this file from cloud?');">
+              Delete
+            </button>
+          </form>
+        </div>
+
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

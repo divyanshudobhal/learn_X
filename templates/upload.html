@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Upload Material • LearnX{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-xl">
+  <div class="bg-slate-900/70 border border-slate-800 p-8 rounded-2xl shadow-xl">
+
+    <h1 class="text-2xl font-semibold mb-2">Upload Study Material 📤</h1>
+    <p class="text-sm text-slate-400 mb-6">
+      Upload PDFs, PPTs, images, or documents. Tags will be generated automatically.
+    </p>
+
+    <form method="POST" enctype="multipart/form-data" class="space-y-5">
+
+      <div>
+        <label class="text-xs text-slate-300 mb-1 block">Choose File</label>
+        <input type="file" name="file" required
+          class="w-full text-sm p-2 rounded-xl border border-slate-700 bg-slate-800 text-slate-300
+                 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+      </div>
+
+      <button type="submit"
+        class="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-sm font-medium shadow
+               shadow-indigo-500/20 transition">
+        Upload to S3 →
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

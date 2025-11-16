@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}AI Chat Assistant • LearnX{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-4xl h-[75vh] flex flex-col bg-slate-900/60 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+
+  <!-- Header -->
+  <div class="p-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-2xl">🤖</span>
+      <h1 class="text-xl font-semibold">AI Learning Assistant</h1>
+    </div>
+
+    <button id="clearChat"
+            class="px-3 py-1 bg-red-600 hover:bg-red-500 rounded-lg text-xs">
+      Clear Chat
+    </button>
+  </div>
+
+  <!-- Chat Window -->
+  <div id="chatBox" class="flex-1 overflow-y-auto p-5 space-y-4"></div>
+
+  <!-- Typing Indicator -->
+  <div id="typingIndicator" class="hidden px-5 pb-2 text-slate-400 text-sm">
+    <span class="animate-pulse">🤖 AI is typing...</span>
+  </div>
+
+  <!-- Input Box -->
+  <div class="p-4 border-t border-slate-800 bg-slate-900/80 flex items-center gap-3">
+    <input type="text" id="questionInput"
+           placeholder="Ask your question..."
+           class="flex-1 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sm text-slate-300
+                  focus:ring-2 focus:ring-indigo-500 outline-none">
+
+    <button id="sendBtn"
+            class="px-5 py-2 bg-indigo-500 hover:bg-indigo-400 rounded-xl text-sm shadow-md shadow-indigo-500/30">
+      Send
+    </button>
+  </div>
+</div>
+
+<script>
+// DOM elements
+const chatBox = document.getElementById("chatBox");
+const questionInput = document.getElementById("questionInput");
+const sendBtn = document.getElementById("sendBtn");
+const typingIndicator = document.getElementById("typingIndicator");
+const clearChat = document.getElementById("clearChat");
+
+// Auto Scroll
+function scrollToBottom() {
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// Add message bubble
+function addMessage(text, sender) {
+  const bubble = document.createElement("div");
+
+  if (sender === "user") {
+    bubble.className = "flex justify-end";
+    bubble.innerHTML = `
+      <div class="max-w-[70%] bg-indigo-600 text-white px-4 py-3 rounded-2xl rounded-br-sm shadow">
+        ${text}
+      </div>
+    `;
+  } else {
+    bubble.className = "flex justify-start";
+    bubble.innerHTML = `
+      <div class="max-w-[70%] bg-slate-800 text-slate-200 px-4 py-3 rounded-2xl rounded-bl-sm border border-slate-700 shadow leading-relaxed">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xl">🤖</span> <span class="font-medium text-sm">AI Assistant</span>
+        </div>
+        <span class="ai-text"></span>
+      </div>
+    `;
+  }
+
+  chatBox.appendChild(bubble);
+  scrollToBottom();
+  return bubble;
+}
+
+// Typing animation for AI
+async function typeText(element, text) {
+  let i = 0;
+  while (i < text.length) {
+    element.innerHTML += text.charAt(i);
+    i++;
+    scrollToBottom();
+    await new Promise(r => setTimeout(r, 20)); // typing speed
+  }
+}
+
+// Send message
+async function sendMessage() {
+  const message = questionInput.value.trim();
+  if (!message) return;
+
+  // User bubble
+  addMessage(message, "user");
+
+  questionInput.value = "";
+  typingIndicator.classList.remove("hidden");
+
+  // Send to backend
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({message})
+  });
+
+  const data = await response.json();
+  const aiBubble = addMessage("", "ai");
+
+  typingIndicator.classList.add("hidden");
+
+  // Type AI response letter-by-letter
+  await typeText(aiBubble.querySelector(".ai-text"), data.answer);
+}
+
+// Button click
+sendBtn.addEventListener("click", sendMessage);
+
+// Enter key submits
+questionInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendMessage();
+});
+
+// Clear chat
+clearChat.addEventListener("click", () => {
+  chatBox.innerHTML = "";
+});
+
+</script>
+
+{% endblock %}

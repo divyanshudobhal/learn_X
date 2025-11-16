@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Teacher Dashboard • LearnX{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl w-full">
+
+  <!-- Header -->
+  <h1 class="text-2xl font-semibold mb-2">Welcome, {{ username }} 👩‍🏫</h1>
+  <p class="text-sm text-slate-400 mb-6">
+    Manage learning materials, upload content, and assist students.
+  </p>
+
+  <!-- Cards Section -->
+  <div class="grid md:grid-cols-3 gap-5">
+
+    <!-- Upload Material -->
+    <a href="{{ url_for('upload_page') }}"
+       class="bg-slate-900/70 border border-slate-800 hover:border-indigo-500 
+              hover:shadow-lg hover:shadow-indigo-500/20 transition rounded-2xl p-5 block">
+      
+      <h2 class="font-semibold text-lg mb-2 text-indigo-400">📤 Upload Material</h2>
+      <p class="text-xs text-slate-400">
+        Upload PDFs, PPTs, notes, study materials to S3 with AI-generated tags.
+      </p>
+    </a>
+
+    <!-- View All Uploads -->
+    <a href="{{ url_for('files_page') }}"
+       class="bg-slate-900/70 border border-slate-800 hover:border-indigo-500 
+              hover:shadow-lg hover:shadow-indigo-500/20 transition rounded-2xl p-5 block">
+      
+      <h2 class="font-semibold text-lg mb-2 text-indigo-400">📂 View Uploaded Files</h2>
+      <p class="text-xs text-slate-400">
+        Browse all materials, preview them, or check AI tags.
+      </p>
+    </a>
+<a href="{{ url_for('teacher_files') }}"
+   class="bg-slate-900/70 border border-slate-800 hover:border-indigo-500 
+          hover:shadow-lg hover:shadow-indigo-500/20 transition rounded-2xl p-5 block">
+  <h2 class="font-semibold text-lg mb-2 text-indigo-400">📂 My Uploads</h2>
+  <p class="text-xs text-slate-400">
+    Manage all files you’ve uploaded, view AI summaries, rename or delete.
+  </p>
+</a>
+
+    <!-- AI Chatbot -->
+    <a href="{{ url_for('chatbot') }}"
+       class="bg-slate-900/70 border border-slate-800 hover:border-indigo-500 
+              hover:shadow-lg hover:shadow-indigo-500/20 transition rounded-2xl p-5 block">
+      
+      <h2 class="font-semibold text-lg mb-2 text-indigo-400">🤖 AI Assistant</h2>
+      <p class="text-xs text-slate-400">
+        Generate questions, notes, explanations using AI.
+      </p>
+    </a>
+
+  </div>
+</div>
+{% endblock %}
